@@ -4,55 +4,50 @@ require(rentrez)
 require(tidyverse)
 require(Biostrings)
 
+# link <- rentrez::entrez_link(
+#   dbfrom = 'nuccore', 
+#   db = 'taxonomy', 
+#   web_history = basic_search$web_history,
+#   )
+# link <- tibble(enframe(link))
+
+
+
 #' @title get_ncbi_ids
 #'
 #' @param searchexp the search expression string with terms, booleans, etc.
-#'
+#' @param db the ncbi database to search
 #' @return the search results for the given expression with all available ids, and a webhistory token for entrez_summary or entrez_fetch
-get_ncbi_ids <- function(searchexp){
+#' 
+get_ncbi_ids <- function(searchexp, db){
   
   # find out how many ids available from 1st search
-  Esearch <- entrez_search(db = "nuccore", term = searchexp, retmax = 100)
-  # use 'count' from first search to get all ids; get webenv with 'use_history = TRUE'
-  Esearch2 <- entrez_search(db = "nuccore", 
-                            term = searchexp, retmax = Esearch$count,
-                            use_history = TRUE)
-  message('Returning ids from Entrez nuccore search:')
+  Esearch <- rentrez::entrez_search(
+    db = db, 
+    term = searchexp, 
+    retmax = 100)
+  # use 'count' from first search to get all ids; get web history with 'use_history = TRUE'
+  Esearch2 <- rentrez::entrez_search(
+    db = db, 
+    term = searchexp, 
+    retmax = Esearch$count,
+    use_history = TRUE)
+  message('Returning metadata from basic search...')
   print(Esearch2)
   return(Esearch2)
 }
+# ## vignette:
+# apikey <- 'b1a183199be1617b6de4f030ade08'
+# searchexp <- '18S ribosomal rna[Title] AND "apicomplexa"[Organism] AND 300:2500[SLEN] AND biomol_genomic[PROP] NOT genome[TITL] AND (ddbj_embl_genbank[filter] OR refseq[filter])'
+# basic_search <- get_ncbi_ids(searchexp, db = 'nuccore')
+# basic_search$web_history
+# basic_search$count
+# 
+# 
+# searchexp <- 'apicomplexa'
+# basic_search <- get_ncbi_ids(searchexp, db = 'taxonomy')
 
 
-#' @title get_Esummaries
-#'
-#' @details subroutine run by get_Esummary_df(); wrapper for entrez_summary() to get large volumes of summary records for a given search expression in 500 records/query steps.
-#' 
-#' @param web_history a web history token returned by entrez_search
-#' @param id.count the total number of available records from entrez_search
-#' @param apikey an apikey is necessary to do multiple downloads/second
-#'
-#' @return a list of summary records. Same as output from entrez_summary but with multiple queries' results concatenated into a larger list
-#' 
-#' @examples Esummary_list <- get_Esummaries(webhist, id.count, apikey)
-#' 
-get_Esummaries <- function(web_history, id.count, apikey) {
-  # init list to gather downloads
-  Esummary_list <- list()
-  # iterate until all summary records obtained
-  for (i in seq(1, id.count, 500)) {
-    # display downloads progress
-    print(paste0(round(i/id.count*100), '%'))
-    # add each query to growing Esummary list
-    Esummary_list <-  c(
-      Esummary_list,
-      entrez_summary(db = "nuccore", web_history = web_history,
-                     retstart = i-1, retmax=500, api_key = apikey,
-                     always_return_list = TRUE, retmode = 'json')
-    )
-    Sys.sleep(0.11)
-  }
-  return(Esummary_list)
-}
 
 #' @title get_ESummary_df
 #'
@@ -64,30 +59,55 @@ get_Esummaries <- function(web_history, id.count, apikey) {
 #'
 #' @examples
 #' apikey <- 'b1a183199be1617b6de4f030ade08' # use your own apikey
-#' searchexp <- '18S AND apicomplexa[ORGN] AND 0:10000[SLEN]) NOT (genome[TITL])'
+#' searchexp <- '18S AND apicomplexa[ORGN] AND 0:10000[SLEN] NOT (genome[TITL])'
 #' summary.df <- get_ESummary_df(searchexp, apikey)
 
-get_ESummary_df <- function(searchexp, apikey){
-  basic_search <- get_ncbi_ids(searchexp)
-  webhist <- basic_search$web_history
+get_ESummary_df <- function(searchexp, db, apikey){
+  
+  # perform basic search to get webhistory and records count
+  basic_search <- get_ncbi_ids(searchexp, db)
+  web_history <- basic_search$web_history
   id.count <- basic_search$count
+  
+  # init list to gather downloads 
+  Esummary_list <- list()
+  # init df to compile records from all downloads
   df <- tibble(id = basic_search$ids)
-  print(glimpse(df))
+  
+  # display downloads progress
   message('Getting summaries....')
-  Esummary_list <- get_Esummaries(webhist, id.count, apikey)
-  message('done downloads....\nflattening lists....')
+  progress_bar = txtProgressBar(min=0, max=id.count, style = 1, char="=")
+  
+  # iterate until all summary records obtained
+  for (i in seq(1, id.count, 500)) {
+    # print(paste0(round(i/id.count*100), '%'))
+    # add each query to growing Esummary list
+    Esummary_list <-  c(
+      Esummary_list,
+      entrez_summary(db = db, web_history = web_history,
+                     retstart = i-1, retmax=500, api_key = apikey,
+                     always_return_list = TRUE, retmode = 'json')
+    )
+    setTxtProgressBar(progress_bar, value = i)
+    Sys.sleep(0.11)
+  }
+  
+  message('\ndone downloads....\nflattening lists....')
   df <- df %>%
     mutate(listcol = Esummary_list) %>%
     unnest_wider(listcol)
   return(df)
-  }
+}
 
-# ncbi api key, obviously you'll need to put your own (don't copy this fake one)
-# apikey <- 'b1a183199be1617b6de4f030ade08' 
-# searchexp <- '18S AND apicomplexa[ORGN] AND 0:10000[SLEN]) NOT (genome[TITL])'
-# summary.df <- get_ESummary_df(searchexp, apikey)
 # 
-
+# # ncbi api key, obviously you'll need to put your own (don't copy this fake one)
+# 
+# apikey <- 'b15a151c3a183199be1617b6de4f030ade08' 
+# searchexp <- '18S ribosomal rna[Title] AND "apicomplexa"[Organism] AND 300:2500[SLEN] AND biomol_genomic[PROP] NOT genome[TITL] AND (ddbj_embl_genbank[filter] OR refseq[filter])'
+# 
+# searchexp <- 'apicomplexa'
+# summary.df <- get_ESummary_df(searchexp, apikey, db = 'taxonomy')
+# # 
 
 
 #' get_Efasta
@@ -111,7 +131,10 @@ get_Efasta <- function(searchexp, apikey) {
   basic_search <- get_ncbi_ids(searchexp)
   webhist <- basic_search$web_history
   id.count <- basic_search$count
+  
   message(paste('Fetching', id.count, 'fasta records'))
+  progress_bar = txtProgressBar(min=0, max=id.count, style = 1, char="=")
+  
   fasta <- ''
   for (i in seq(1, id.count, 500)){
     print(paste0(round(i/id.count*100), '%'))
@@ -119,9 +142,10 @@ get_Efasta <- function(searchexp, apikey) {
                          retstart = i-1, retmax=500, api_key = apikey,
                          rettype = 'fasta')
     fasta <- paste0(fasta, temp)
+    setTxtProgressBar(progress_bar, value = i)
   }
   print('100%')
-  message('Victory! You downloaded those seqs like a champ :)\n\nTidying data....')
+  message('Victory!\nTidying data....')
   # split fasta into lines and write a temp file
   write(fasta, "temp.fasta", sep = "\n")
   # read lines as a DNAStringSet object using Biostrings package
