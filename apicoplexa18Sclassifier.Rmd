@@ -1,0 +1,16 @@
+---
+title: "A rapid 18S classifier for metabarcoding *Apicomlexa* parasites"
+output: html_notebook
+---
+
+
+
+```{r}
+
+```
+
+
+I learned much of what I applied here from the following tutorials:
+
+Rentrez tutorial for obtaining data from NCBI nucleotide database
+

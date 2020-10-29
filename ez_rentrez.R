@@ -4,13 +4,6 @@ require(rentrez)
 require(tidyverse)
 require(Biostrings)
 
-# link <- rentrez::entrez_link(
-#   dbfrom = 'nuccore', 
-#   db = 'taxonomy', 
-#   web_history = basic_search$web_history,
-#   )
-# link <- tibble(enframe(link))
-
 
 
 #' @title get_ncbi_ids
@@ -19,6 +12,7 @@ require(Biostrings)
 #' @param db the ncbi database to search
 #' @return the search results for the given expression with all available ids, and a webhistory token for entrez_summary or entrez_fetch
 #' 
+# Do a basic NCBI search; get metadata and record ids; set up the fetching
 get_ncbi_ids <- function(searchexp, db){
   
   # find out how many ids available from 1st search
@@ -128,7 +122,7 @@ get_ESummary_df <- function(searchexp, db, apikey){
 #' apicomplexa.fasta <- get_Efasta(webhist, id.count, apikey)
 #' 
 get_Efasta <- function(searchexp, apikey) {
-  basic_search <- get_ncbi_ids(searchexp)
+  basic_search <- get_ncbi_ids(searchexp, 'nuccore')
   webhist <- basic_search$web_history
   id.count <- basic_search$count
   
@@ -137,15 +131,12 @@ get_Efasta <- function(searchexp, apikey) {
   
   fasta <- ''
   for (i in seq(1, id.count, 500)){
-    print(paste0(round(i/id.count*100), '%'))
     temp <- entrez_fetch(db = "nuccore", web_history = webhist,
                          retstart = i-1, retmax=500, api_key = apikey,
                          rettype = 'fasta')
     fasta <- paste0(fasta, temp)
     setTxtProgressBar(progress_bar, value = i)
   }
-  print('100%')
-  message('Victory!\nTidying data....')
   # split fasta into lines and write a temp file
   write(fasta, "temp.fasta", sep = "\n")
   # read lines as a DNAStringSet object using Biostrings package
@@ -154,7 +145,34 @@ get_Efasta <- function(searchexp, apikey) {
   file.remove('temp.fasta')
   # arrange fasta into df
   fasta.df <- data.frame(title = names(fasta), seq = paste(fasta))
-  message('Done.')
+  message('Done!')
   return(fasta.df)
 }
+
+
+
+# takes web history to get linked taxonomy data from nuccore search ids
+# returns dataframe to link by 'taxid' 
+get_nuccore_taxonomy <- function(web_history) {
+  
+  # cross reference last nuccore search from web_history
+  link <- rentrez::entrez_link(
+    dbfrom = 'nuccore',
+    db = 'taxonomy',
+    web_history = web_history,
+    cmd="neighbor_history"
+  )
+  # fetch all linked taxonomy records
+  taxa <- rentrez::entrez_fetch(
+    db = 'taxonomy',
+    web_history = link$web_histories$nuccore_taxonomy,
+    rettype = 'xml'
+  )
+  # tidy up xml to df
+  taxa <- XML::xmlToDataFrame(taxa) %>%
+    dplyr::rename(taxid = TaxId)
+  return(taxa)
+}
+
+
 
