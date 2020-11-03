@@ -45,10 +45,13 @@ knitr::opts_chunk$set(
 if (!dir.exists(file.path('.','data'))){
   dir.create(file.path('.', 'data'))
 }
-
 if (!dir.exists(file.path('.','results'))){ 
   dir.create(file.path('.', 'results'))
 }
+if (!dir.exists(file.path('.','models'))){ 
+  dir.create(file.path('.', 'models'))
+}
+rm(list=ls())
 ```
 
 
@@ -61,8 +64,6 @@ if (!dir.exists(file.path('.','results'))){
 library(tidyverse) # always and forever
 # install.packages('rentrez')
 library(rentrez) # for ncbi downloads
-# install.packages('seqinr')
-library(seqinr) # for sequence handling
 # install.packages('Biostrings')
 library(Biostrings) # for sequence handling
 # install.packages('patchwork')
@@ -75,10 +76,6 @@ library(ggridges) # for ridge density plots
 library(rcartocolor) # for pretty plot colours
 # install.packages('caret')
 library(caret) # for everything machine learning-related
-# install.packages('klaR') 
-library(klaR) # naive bayes classifier
-# install.packages('randomForest')
-library(randomForest) # RF classifier
 # install.packages('doParallel')
 library(doParallel) # allows parallelization of training tasks
 # install.packages('beepr')
@@ -211,9 +208,9 @@ searchexp <- '18S ribosomal rna[Title] AND "apicomplexa"[Organism] AND 300:2500[
 # Get search metadata, summaries, sequences
 apicomplexa.search <- get_ncbi_ids(searchexp, db = 'nuccore')
 apicomplexa.summary.df <- get_ESummary_df(searchexp, 'nuccore', apikey)
-beep(3)
+beep(2)
 apicomplexa.fasta <- get_Efasta(searchexp, apikey)
-beep(7)
+beep(2)
 
 # combine summary data and fasta data
 apicomplexa.df <- apicomplexa.summary.df %>%
@@ -673,8 +670,7 @@ ctrl <- caret::trainControl(
 
 Random Forest is a powerful and robust classification/regression method based on creating a group of decision trees. Model tuning was performed by varying `mtry`, the number of variables that can be used to split data on at a given node in a tree; a general starting point is the square-root of the number of predictors (18). Optimal accuracy (99 %, sd=0.5) was achieved with `mtry` = 30, though accuracy was very high across the range applied (fig.5:RF). 
 
-```
-#{r Random Forest 1, eval=FALSE, include=FALSE}
+```{r Random Forest 1}
 
 # keep track of runtime, for reference
 rf.timed <- Sys.time()
@@ -792,6 +788,7 @@ nb.model <- caret::train(
   verbose = FALSE
 )
 nb1.timed <- Sys.time()-nb1.timed
+beep(2)
 write_rds(nb.model, './models/nb.model.rds')
 print(nb.model)
 ```
@@ -1257,4 +1254,11 @@ This project would not even have been possible without many R packages that have
 --------------------------------
 
 # References
+
+```{r}
+beep(7)
+Sys.sleep(1)
+beep(7)
+Sys.sleep(1)
+```
 
