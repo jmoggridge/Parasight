@@ -40,7 +40,15 @@ knitr::opts_chunk$set(
 	message = FALSE,
 	warning = FALSE
 )
-# options(tinytex.verbose = TRUE)
+
+# create subdirectories if not already present
+if (!dir.exists(file.path('.','data'))){
+  dir.create(file.path('.', 'data'))
+}
+
+if (!dir.exists(file.path('.','data'))){ 
+  dir.create(file.path('.', 'results'))
+}
 ```
 
 
@@ -188,14 +196,13 @@ get_Efasta <- function(searchexp, apikey) {
 
 - Downloading the NCBI Apicomplexa 18S sequence dataset
 
-``` 
-#{r downloads}
+```{r downloads}
 # ncbi api key
 apikey <- '889fdb9786a14019a0a1257196a09ba4ba08'
 
 # apicomplexa 18S, between 300-2500 bp, not from a genome,
 #  from genbank or refseq collections:
-# searchexp <- '18S ribosomal rna[Title] AND "apicomplexa"[Organism] AND 
+# searchexp <- '18S ribosomal rna[Title] AND "apicomplexa"[Organism] AND
 #     300:2500[SLEN] AND biomol_genomic[PROP] NOT genome[TITL] AND
 #     (ddbj_embl_genbank[filter] OR refseq[filter])'
 
@@ -211,7 +218,7 @@ beep(7)
 # combine summary data and fasta data
 apicomplexa.df <- apicomplexa.summary.df %>%
   bind_cols(apicomplexa.fasta)
-
+head(glimpse(apicomplexa.df))
 # save to file, clean up workspace
 write_rds(apicomplexa.df, './data/apicomplexa.rds')
 rm(list=setdiff(ls(), "apicomplexa.df"))
@@ -700,8 +707,7 @@ write_rds(rf.model, './models/random_forest.model.rds')
 Similar to random forest, stochastic gradient boosting also employs a  another tree ensemble-based approach, except with a large number of tiny decision stumps strengthened through 'boosting'. GBM is prone to over-training as the algorithm doesn't stop automatically. Two tuning searches over a range of stump-depths (1,2, or 3 per node; GBM1), learning rates (0.01, 0.1; GBM2), and boosting iterations (50-150 GBM1; 100-500 GBM2). After performing the first tuning search (fig.5:GBM1), it appeared that the optimal model (`depth`=2, `ntree`=150) could still be improved with more boosting iterations. This was not the case, though it was confirmed that the model would not be improved by decreasing the learning rate, given 100-500 boosting iterations (fig.5:GBM2). Bootstrapped accuracy estimates of the GBM1 and GBM2 models were 98 % (sd=0.6) and 97.5 % (sd=0.7).
 
 
-```
-#{r gbm1}
+```{r gbm1}
 gbm.timed <- Sys.time()
 cl <- parallel::makeCluster(4, setup_strategy = "sequential")
 registerDoParallel(cl)
@@ -722,8 +728,9 @@ write_rds(gbm.model, './models/gbm.model.rds')
 
 - Accuracy appears to be ~98% according to resampling. I tried to find an optimal GBM classifier by tuning the number of trees (n.trees) and the learning rate (shrinkage).
 
-```
-{r gbm2}
+
+
+```{r gbm2}
 # set tuning search grid (4*1*2*1) = 8 models
 grid <- expand.grid(
   # Boosting Iterations
@@ -766,8 +773,7 @@ Naive Bayes uses a probabilistic approach to classification that makes strong as
 For these models, I centered and scaled (mean=0, sd=1) each k-mer proportion variable in the train and test datasets (using the `caret` package once again).
 For naive Bayes, the Gaussian model was better that one using a non-parametric distribution (Fig.5:NB). Training accuracy was 93.8% (sd. 3.8; Kappa 0.93+/-0.04), which was worse than the RF, GBM and kNN classifiers. 
 
-```
-{r nb, warning=FALSE}
+```{r nb, warning=FALSE}
 
 # setup cluster of processors (4 on my macbook)
 cl <- parallel::makeCluster(4, setup_strategy = "sequential")
@@ -796,8 +802,7 @@ print(nb.model)
 kNN is a distance-based algorithm that requires data to be normalized, so centering and scaling were performed prior to training. Ten models with varying *k* (5-23) all had high accuracy, though performance was best with fewer neighbours (fig.4:kNN). The best model (*k*=5) had accuracy of 98.4 % (sd: 0.63 %), rivaling the random forest classifier.
 
 
-```
-{r knn train, message=FALSE, warning=FALSE}
+```{r knn train, message=FALSE, warning=FALSE}
 
 cl <- parallel::makeCluster(4, setup_strategy = "sequential")
 registerDoParallel(cl)
@@ -1036,8 +1041,7 @@ rm(ctrl, cl)
 A random forest classifier was trained on the 'species-rank' training set of 600 18S rRNA k-mer profiles from 20 different apicomplexan species. Models were generated using range of `mtry` (predictors per node) values (1-30) and accuracy estimated were derived from by a 5 times 5-fold cross-validation re-sampling. The best random forest classifier (`mtry=25`) had a training accuracy of 93.9% (sd. 2.3%; Kappa: 0.936 +/- 0.024). The classifier was validated by testing on an unseen dataset of 580 k-mer profiles evenly divided between 20 species; test accuracy was 95.5% (95% CI: 93.5, 97.0; Kappa 0.952; fig.6-left).
 
 
-```
-#{r RF species train}
+```{r RF species train}
 # set train control to 5 times 5-fold cross-validation
 ctrl <- trainControl(method = 'repeatedcv', number = 5, repeats = 5)
 
@@ -1101,8 +1105,7 @@ print(rf.species.confusion$overall)
 
 To test the limits of the random forest algorithm, I assembled a dataset of 686 18S rRNA k-mer profiles, including 8 species of the genus *Babesia* and 6 species of the closely-related genus *Theileria*, with sequences evenly-split between species. This set was split 1:1 into training and test datasets. Training was performed for a range of `mtry` values; re-sampling was done by a 5 times 10-fold cross-validation strategy. The best model (`mtry=30`) had an estimated accuracy of 94.1% (sd. 4.8%; Kappa 0.936 +/- 0.051) in training. When tested on the unseen portion of the data, accuracy increased to 97.6% (95% CI: 95.4, 99.0; Kappa 0.974; fig.6-right).
 
-```
-#{r RF Babesia train}
+```{r RF Babesia train}
 # set train control to 5 times 10-fold cross-validation
 ctrl <- trainControl(method = 'repeatedcv', number = 10, repeats = 5)
 
