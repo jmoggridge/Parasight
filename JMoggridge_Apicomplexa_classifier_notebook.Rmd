@@ -46,7 +46,7 @@ if (!dir.exists(file.path('.','data'))){
   dir.create(file.path('.', 'data'))
 }
 
-if (!dir.exists(file.path('.','data'))){ 
+if (!dir.exists(file.path('.','results'))){ 
   dir.create(file.path('.', 'results'))
 }
 ```
