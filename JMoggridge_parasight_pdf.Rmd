@@ -1,6 +1,6 @@
 ---
 title: "**Para*sight***: Classification of apicomplexan 18S rRNA sequences using (1-4)-mer profiles"
-author: "Jason Moggridge 1159229"
+author: "Jason Moggridge and ...."
 date: "28/10/2020"
 output: pdf_document
 bibliography: references.bib
