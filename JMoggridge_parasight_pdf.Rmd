@@ -1196,5 +1196,4 @@ write_rds(fig6, './results/plot.fig6.rds')
 
 # References
 
-
-
+<!-- Rmarkdown will stick the references used in the text here from the bibliography file 'references.bib' -->
