@@ -2,3 +2,12 @@
 .Rhistory
 .RData
 .Ruserdata
+/data/
+/models/
+/results/
+*.html
+*.pdf
+*cache/
+*_pdf_
+*_notebook_
+.DS_Store
