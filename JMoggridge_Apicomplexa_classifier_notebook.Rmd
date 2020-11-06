@@ -82,6 +82,16 @@ library(doParallel) # allows parallelization of training tasks
 library(beepr) # makes beep sounds (for when long computation finishes)
 # install.packages('kableExtra')
 library(kableExtra)
+# install.packages('gbm')
+library(gbm)
+# install.packages('klaR')
+library(klaR)
+# install.packages("rpart")
+library("rpart")
+# install.packages("rpart.plot")
+library("rpart.plot")
+# install.packages("rattle")
+library("rattle")
 ```
 
 
@@ -697,7 +707,77 @@ rf.timed
 write_rds(rf.model, './models/random_forest.model.rds')
 ```
 
+```{r 2-mer Classifier}
+#Build classification tree
+rpartTree1 <- rpart(formula = genus~., data = genusTrain[,1:4], method='class')
+rpartTree1
 
+#Predict test dataset
+rpartPredict1 <- predict(rpartTree1, newdata = genusTrain[,2:4], type='class')
+
+#Build contingency table
+rpartEval1 <- table(genusTrain$genus, rpartPredict1)
+rpartEval1
+
+#Evaluate decision tree performance
+rpartConfusionMatrix1 <- confusionMatrix(rpartPredict1, genusTrain$genus)
+print(rpartConfusionMatrix1)
+
+#Plot decision tree
+fancyRpartPlot(model=rpartTree1, caption = "Genus classification")
+```
+**Figure 4**. 1-mer decision tree of Apicomplexan genera.
+```{r 2-mer Classification}
+
+rpartTree2 <- rpart(formula = genus~., data = genusTrain[,c(1,5:20)], method='class')
+rpartTree2
+#Predict test dataset
+rpartPredict2 <- predict(rpartTree2, newdata = genusTrain[,5:20], type='class')
+
+#Build contingency table
+rpartEval2 <- table(genusTrain$genus, rpartPredict2)
+rpartEval2
+
+#Evaluate decision tree performance
+rpartConfusionMatrix2 <- confusionMatrix(rpartPredict2, genusTrain$genus)
+print(rpartConfusionMatrix2)
+
+#Plot decision tree
+fancyRpartPlot(model=rpartTree2, main="2-mer decision tree of Apicomplexa", caption = "Genus classification")
+```
+**Figure 5**. 2-mer decision tree of Apicomplexan genera.
+```{r 3-mer Classification}
+#Predict test dataset
+rpartPredict3 <- predict(rpartTree3, newdata = genusTrain[,21-84], type='class')
+
+#Build contingency table
+rpartEval3 <- table(genusTrain$genus, rpartPredict3)
+rpartEval3
+
+#Evaluate decision tree performance
+rpartConfusionMatrix3 <- confusionMatrix(rpartPredict3, genusTrain$genus)
+print(rpartConfusionMatrix3)
+
+#Plot decision tree
+fancyRpartPlot(model=rpartTree3, main="3-mer decision tree of Apicomplexa", caption = "Genus classification")
+```
+**Figure 6**. 3-mer decision tree of Apicomplexan genera.
+```{r 4-mer Classification}
+#Predict test dataset
+rpartPredict4 <- predict(rpartTree, newdata = genusTrain[,85-340], type='class')
+
+#Build contingency table
+rpartEval4 <- table(genusTrain$genus, rpartPredict4)
+rpartEval4
+
+#Evaluate decision tree performance
+rpartConfusionMatrix4 <- confusionMatrix(rpartPredict4, genusTrain$genus)
+print(rpartConfusionMatrix4)
+
+#Plot decision tree
+fancyRpartPlot(model=rpartTree, main="4-mer decision tree of Apicomplexa", caption = "Genus classification")
+```
+**Figure 7**. 4-mer decision tree of Apicomplexan genera.
 #### Stochastic gradient boosting (GBM):
 
 Similar to random forest, stochastic gradient boosting also employs a  another tree ensemble-based approach, except with a large number of tiny decision stumps strengthened through 'boosting'. GBM is prone to over-training as the algorithm doesn't stop automatically. Two tuning searches over a range of stump-depths (1,2, or 3 per node; GBM1), learning rates (0.01, 0.1; GBM2), and boosting iterations (50-150 GBM1; 100-500 GBM2). After performing the first tuning search (fig.5:GBM1), it appeared that the optimal model (`depth`=2, `ntree`=150) could still be improved with more boosting iterations. This was not the case, though it was confirmed that the model would not be improved by decreasing the learning rate, given 100-500 boosting iterations (fig.5:GBM2). Bootstrapped accuracy estimates of the GBM1 and GBM2 models were 98 % (sd=0.6) and 97.5 % (sd=0.7).
@@ -871,7 +951,7 @@ plot.tunings <-
 plot.tunings
 write_rds(plot.tunings, './results/plot.tunings.rds')
 ```
-**Figure 4**. Tuning searches for each classification algorithm in training on the genus-rank dataset of apicomplexan 18S k-mer profiles. Each point represents an individual classifier explored during the tuning search by `caret::train`.
+**Figure 8**. Tuning searches for each classification algorithm in training on the genus-rank dataset of apicomplexan 18S k-mer profiles. Each point represents an individual classifier explored during the tuning search by `caret::train`.
 
 
 
@@ -1015,7 +1095,7 @@ write_rds(plot.genus.byclass.results,
           "./results/plot.genus.byclass.results.rds")
 
 ```
-**Figure 5**. Performance of various genus-rank classifiers in validation with unseen 18S k-mer profiles from the test dataset. *left* Overall accuracy +/- sd is shown as a point-range in black, Kappa statistic is shown as a red point; *right* Genus-specific performance statistics for the five classifiers tested. (GBM: stochastic gradient boosting, kNN: k-nearest neighbours, NB: naive Bayes, RF: random forest)
+**Figure 9**. Performance of various genus-rank classifiers in validation with unseen 18S k-mer profiles from the test dataset. *left* Overall accuracy +/- sd is shown as a point-range in black, Kappa statistic is shown as a red point; *right* Genus-specific performance statistics for the five classifiers tested. (GBM: stochastic gradient boosting, kNN: k-nearest neighbours, NB: naive Bayes, RF: random forest)
 
 -----
 
@@ -1228,7 +1308,7 @@ fig6 <- plot.overall.acc.byrank + plot.rf.species.byclass +
 fig6
 write_rds(fig6, './results/plot.fig6.rds')
 ```
-**Figure 6**. *left:* Overall accuracy of random forest classifiers on three datasets, with assignments at the species- ('species-rank' and '*Babesia/Theileria*' datasets) and genus-ranks. *right:* By-class accuracy of the random forest classifier on sequences from 20 species of *Apicomplexa* (species-rank dataset).
+**Figure 10**. *left:* Overall accuracy of random forest classifiers on three datasets, with assignments at the species- ('species-rank' and '*Babesia/Theileria*' datasets) and genus-ranks. *right:* By-class accuracy of the random forest classifier on sequences from 20 species of *Apicomplexa* (species-rank dataset).
 
 
 --------------------------------
