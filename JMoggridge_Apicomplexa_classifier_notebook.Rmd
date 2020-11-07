@@ -1,7 +1,7 @@
 ---
 title: "**Para*sight***: Classification of apicomplexan 18S rRNA sequences using (1-4)-mer profiles ~ *notebook*"
 author: "Jason Moggridge and ...."
-date: "28/10/2020"
+date: "06/11/2020"
 output: pdf_document
 bibliography: references.bib
 urlcolor: blue
@@ -86,12 +86,12 @@ library(kableExtra)
 library(gbm)
 # install.packages('klaR')
 library(klaR)
-# install.packages("rpart")
-library("rpart")
-# install.packages("rpart.plot")
-library("rpart.plot")
-# install.packages("rattle")
-library("rattle")
+# install.packages('randomForest')
+library(randomForest)
+# install.packages('rpart'"')
+library(rpart)
+# install.packages('rattle')
+library(rattle)
 ```
 
 
@@ -707,7 +707,7 @@ rf.timed
 write_rds(rf.model, './models/random_forest.model.rds')
 ```
 
-```{r 2-mer Classifier}
+```{r 1-mer Classifier}
 #Build classification tree
 rpartTree1 <- rpart(formula = genus~., data = genusTrain[,1:4], method='class')
 rpartTree1
@@ -728,9 +728,10 @@ fancyRpartPlot(model=rpartTree1, caption = "Genus classification")
 ```
 **Figure 4**. 1-mer decision tree of Apicomplexan genera.
 ```{r 2-mer Classification}
-
+#Build classification tree
 rpartTree2 <- rpart(formula = genus~., data = genusTrain[,c(1,5:20)], method='class')
 rpartTree2
+
 #Predict test dataset
 rpartPredict2 <- predict(rpartTree2, newdata = genusTrain[,5:20], type='class')
 
@@ -747,8 +748,12 @@ fancyRpartPlot(model=rpartTree2, main="2-mer decision tree of Apicomplexa", capt
 ```
 **Figure 5**. 2-mer decision tree of Apicomplexan genera.
 ```{r 3-mer Classification}
+#Build classification tree
+rpartTree3 <- rpart(formula = genus~., data = genusTrain[,c(1,21:84)], method='class')
+rpartTree3
+
 #Predict test dataset
-rpartPredict3 <- predict(rpartTree3, newdata = genusTrain[,21-84], type='class')
+rpartPredict3 <- predict(rpartTree3, newdata = genusTrain[,21:84], type='class')
 
 #Build contingency table
 rpartEval3 <- table(genusTrain$genus, rpartPredict3)
@@ -763,8 +768,12 @@ fancyRpartPlot(model=rpartTree3, main="3-mer decision tree of Apicomplexa", capt
 ```
 **Figure 6**. 3-mer decision tree of Apicomplexan genera.
 ```{r 4-mer Classification}
+#Build classification tree
+rpartTree4 <- rpart(formula = genus~., data = genusTrain[,c(1,85:340)], method='class')
+rpartTree4
+
 #Predict test dataset
-rpartPredict4 <- predict(rpartTree, newdata = genusTrain[,85-340], type='class')
+rpartPredict4 <- predict(rpartTree4, newdata = genusTrain[,85:340], type='class')
 
 #Build contingency table
 rpartEval4 <- table(genusTrain$genus, rpartPredict4)
@@ -775,7 +784,7 @@ rpartConfusionMatrix4 <- confusionMatrix(rpartPredict4, genusTrain$genus)
 print(rpartConfusionMatrix4)
 
 #Plot decision tree
-fancyRpartPlot(model=rpartTree, main="4-mer decision tree of Apicomplexa", caption = "Genus classification")
+fancyRpartPlot(model=rpartTree4, main="4-mer decision tree of Apicomplexa", caption = "Genus classification")
 ```
 **Figure 7**. 4-mer decision tree of Apicomplexan genera.
 #### Stochastic gradient boosting (GBM):
