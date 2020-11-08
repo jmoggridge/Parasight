@@ -5,10 +5,36 @@ date: "06/11/2020"
 output: pdf_document
 bibliography: references.bib
 urlcolor: blue
+params:
+  goi:
+    label: "Gene of Interest"
+    input: radio
+    value: 18S ribosomal RNA
+    choices: 18S ribosomal RNA
+  taxGroup:
+    label: "Taxononic Group"
+    input: text
+    value: apicomplexa
+  seqLen:
+    label: "Sequence Length"
+    input: slider
+    min: 0
+    max: 3000
+    step: 100
+    value: [300, 2500]
+  molType:
+    label: "Molecule Type"
+    input: select
+    choices: [biomol crna, biomol_genomic, biomol_mrna]
+    value: biomol_genomic
+  apiKey:
+    label: "API Key (From NCBI Account)"
+    input: text
+    value: 889fdb9786a14019a0a1257196a09ba4ba08
 ---
-
+<!-- USE this line in the console to knit with custom parameters -->
+<!-- rmarkdown::render("JMoggridge_Apicomplex_classifier_notebook.Rmd", params = "ask") -->
 ----
-
 # Introduction  
 
 Apicomplexans are a large phylum of single-celled eukaryotes, all of which are obligate endoparasites of metazoa except in the rarest of cases [@saffo_nephromyces_2010]. The phylum is named for their apical complex, a unique organellar structure specialized for host-cell invasion. They often have complex life-cycles that can involve several hosts [@seeber_recent_2016]. 
@@ -54,7 +80,6 @@ if (!dir.exists(file.path('.','models'))){
 rm(list=ls())
 ```
 
-
 #### Libraries
 
 
@@ -94,25 +119,29 @@ library(rpart)
 library(rattle)
 ```
 
+```{r Variables}
+#Log variables changed by input parameters
 
+#Individual search parameters
+goi <- params$goi
+taxGroup <- params$taxGroup
+seqLenStart <- params$seqLen[1]
+seqLenEnd <- params$seqLen[2]
+molType <- params$molType
 
-----
+#Full search term for NCBI data search (first called in get_ncbi_ids function - line 53)
+searchexp <- sprintf("%s[Title] AND %s[Organism] AND %s:%s[SLEN] AND %s[PROP] NOT genome[TITL] AND (ddbj_embl_genbank[filter] OR refseq[filter])", goi, taxGroup, seqLenStart, seqLenEnd, molType)
 
-## Analysis
+#Unique NCBI identifier (first called in get_ESummary_df function - line 73)
+apikey <- params$apiKey
 
+```
 
-#### 18S sequence data acquisition  
+```{r Functions}
+#Functions for batch downloads from NCBI are shown in the code below
 
-\hfill\break   
-
-I obtained 15,093 apicomplexan 18S ribosomal rRNA sequences from the NCBI 'nuccore' database using the `rentrez` R package on 2020-10-20. Retrieved sequences were 300-2500 bp long, nuclear genomic sequences only, and only from Genbank or RefSeq record collections (search expression: "*18S ribosomal rna[Title] AND "apicomplexa"[Organism] AND 300:2500[SLEN] AND biomol_genomic[PROP] NOT genome[TITL] AND (ddbj_embl_genbank[filter] OR refseq[filter])*". 
-
-
-- Functions for batch downloads from NCBI are shown in the code below
-
-```{r}
 # get_ncbi_ids does a basic NCBI search; gets metadata and record ids; 
-#  sets up the fetching process in get_ESummary_df and get_Efasta functions.
+# sets up the fetching process in get_ESummary_df and get_Efasta functions.
 get_ncbi_ids <- function(searchexp, db){
   
   # find out how many ids available from 1st search
@@ -198,14 +227,43 @@ get_Efasta <- function(searchexp, apikey) {
   message('Done!')
   return(fasta.df)
 }
+
+#Functions for K-mer classification are shown in the code below
+
+# generates sequence feature columns [(1-4)-mers] for classification
+generate_kmer_features <- function(df){
+  df <- as.data.frame(df)
+  df$seq <- Biostrings::DNAStringSet(df$seq)
+  features.df <- df %>%
+    cbind(
+      Biostrings::letterFrequency(df$seq, letters = c('A', 'C','G'),
+                      as.prob = TRUE),
+      Biostrings::dinucleotideFrequency(df$seq, as.prob = TRUE),
+      Biostrings::trinucleotideFrequency(df$seq, as.prob = TRUE),
+      Biostrings::oligonucleotideFrequency(df$seq, 4, as.prob = TRUE)
+    ) %>%
+    dplyr::select(-seq) 
+  return(features.df)
+}
 ```
+
+
+----
+
+## Analysis
+
+
+#### 18S sequence data acquisition  
+
+\hfill\break   
+
+I obtained 15,093 apicomplexan 18S ribosomal rRNA sequences from the NCBI 'nuccore' database using the `rentrez` R package on 2020-10-20. Retrieved sequences were 300-2500 bp long, nuclear genomic sequences only, and only from Genbank or RefSeq record collections (search expression: "*18S ribosomal rna[Title] AND "apicomplexa"[Organism] AND 300:2500[SLEN] AND biomol_genomic[PROP] NOT genome[TITL] AND (ddbj_embl_genbank[filter] OR refseq[filter])*". 
 
 
 - Downloading the NCBI Apicomplexa 18S sequence dataset
 
 ```{r downloads}
-# ncbi api key
-apikey <- '889fdb9786a14019a0a1257196a09ba4ba08'
+# apikey <- 889fdb9786a14019a0a1257196a09ba4ba08
 
 # apicomplexa 18S, between 300-2500 bp, not from a genome,
 #  from genbank or refseq collections:
@@ -213,7 +271,24 @@ apikey <- '889fdb9786a14019a0a1257196a09ba4ba08'
 #     300:2500[SLEN] AND biomol_genomic[PROP] NOT genome[TITL] AND
 #     (ddbj_embl_genbank[filter] OR refseq[filter])'
 
-searchexp <- '18S ribosomal rna[Title] AND "apicomplexa"[Organism] AND 300:2500[SLEN] AND biomol_genomic[PROP] NOT genome[TITL] AND (ddbj_embl_genbank[filter] OR refseq[filter])'
+
+get_ncbi_ids <- function(searchexp, db){
+  
+  # find out how many ids available from 1st search
+  Esearch <- rentrez::entrez_search(
+    db = db, 
+    term = searchexp, 
+    retmax = 100)
+  # use 'count' from first search to get all ids; get web history with 'use_history = TRUE'
+  Esearch2 <- rentrez::entrez_search(
+    db = db, 
+    term = searchexp, 
+    retmax = Esearch$count,
+    use_history = TRUE)
+  message('Returning metadata from basic search...')
+  print(Esearch2)
+  return(Esearch2)
+}
 
 # Get search metadata, summaries, sequences
 apicomplexa.search <- get_ncbi_ids(searchexp, db = 'nuccore')
@@ -518,23 +593,6 @@ Because the number of k-mers increases by a factor of four with length and I wan
 
 
 ```{r}
-
-# generates sequence feature columns [(1-4)-mers] for classification
-generate_kmer_features <- function(df){
-  df <- as.data.frame(df)
-  df$seq <- Biostrings::DNAStringSet(df$seq)
-  features.df <- df %>%
-    cbind(
-      Biostrings::letterFrequency(df$seq, letters = c('A', 'C','G'),
-                      as.prob = TRUE),
-      Biostrings::dinucleotideFrequency(df$seq, as.prob = TRUE),
-      Biostrings::trinucleotideFrequency(df$seq, as.prob = TRUE),
-      Biostrings::oligonucleotideFrequency(df$seq, 4, as.prob = TRUE)
-    ) %>%
-    dplyr::select(-seq) 
-  return(features.df)
-}
-
 # Generate features for each dataset: genera, species, babesia+theileria
 genera.feat.df <-  genera.df %>%
   generate_kmer_features(.) %>%
@@ -744,7 +802,7 @@ rpartConfusionMatrix2 <- confusionMatrix(rpartPredict2, genusTrain$genus)
 print(rpartConfusionMatrix2)
 
 #Plot decision tree
-fancyRpartPlot(model=rpartTree2, main="2-mer decision tree of Apicomplexa", caption = "Genus classification")
+fancyRpartPlot(model=rpartTree2, caption = "Genus classification")
 ```
 **Figure 5**. 2-mer decision tree of Apicomplexan genera.
 ```{r 3-mer Classification}
@@ -764,7 +822,7 @@ rpartConfusionMatrix3 <- confusionMatrix(rpartPredict3, genusTrain$genus)
 print(rpartConfusionMatrix3)
 
 #Plot decision tree
-fancyRpartPlot(model=rpartTree3, main="3-mer decision tree of Apicomplexa", caption = "Genus classification")
+fancyRpartPlot(model=rpartTree3, caption = "Genus classification")
 ```
 **Figure 6**. 3-mer decision tree of Apicomplexan genera.
 ```{r 4-mer Classification}
@@ -784,7 +842,7 @@ rpartConfusionMatrix4 <- confusionMatrix(rpartPredict4, genusTrain$genus)
 print(rpartConfusionMatrix4)
 
 #Plot decision tree
-fancyRpartPlot(model=rpartTree4, main="4-mer decision tree of Apicomplexa", caption = "Genus classification")
+fancyRpartPlot(model=rpartTree4, caption = "Genus classification")
 ```
 **Figure 7**. 4-mer decision tree of Apicomplexan genera.
 #### Stochastic gradient boosting (GBM):
@@ -993,6 +1051,8 @@ nb.confusion <- confusionMatrix(table(
 knn.confusion <- confusionMatrix(table(
   predict(knn.model, newdata= genusTest[, features]),
   genusTest$genus))
+
+
 
 # gather test results from genus-rank classifications
 classifiers.tests <-
