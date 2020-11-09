@@ -8,9 +8,8 @@ urlcolor: blue
 params:
   goi:
     label: "Gene of Interest"
-    input: radio
+    input: text
     value: 18S ribosomal RNA
-    choices: 18S ribosomal RNA
   taxGroup:
     label: "Taxononic Group"
     input: text
@@ -77,7 +76,6 @@ if (!dir.exists(file.path('.','results'))){
 if (!dir.exists(file.path('.','models'))){ 
   dir.create(file.path('.', 'models'))
 }
-rm(list=ls())
 ```
 
 #### Libraries
