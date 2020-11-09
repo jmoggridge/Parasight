@@ -31,8 +31,7 @@ params:
     input: text
     value: 889fdb9786a14019a0a1257196a09ba4ba08
 ---
-<!-- USE this line in the console to knit with custom parameters -->
-<!-- rmarkdown::render("JMoggridge_Apicomplex_classifier_notebook.Rmd", params = "ask") -->
+
 ----
 # Introduction  
 
@@ -111,10 +110,12 @@ library(gbm)
 library(klaR)
 # install.packages('randomForest')
 library(randomForest)
-# install.packages('rpart'"')
+# install.packages('rpart')
 library(rpart)
 # install.packages('rattle')
 library(rattle)
+# install.library('ggplot2')
+library(ggplot2)
 ```
 
 ```{r Variables}
@@ -127,10 +128,10 @@ seqLenStart <- params$seqLen[1]
 seqLenEnd <- params$seqLen[2]
 molType <- params$molType
 
-#Full search term for NCBI data search (first called in get_ncbi_ids function - line 53)
+#Full search term for NCBI data search (first called in get_ncbi_ids function)
 searchexp <- sprintf("%s[Title] AND %s[Organism] AND %s:%s[SLEN] AND %s[PROP] NOT genome[TITL] AND (ddbj_embl_genbank[filter] OR refseq[filter])", goi, taxGroup, seqLenStart, seqLenEnd, molType)
 
-#Unique NCBI identifier (first called in get_ESummary_df function - line 73)
+#Unique NCBI identifier (first called in get_ESummary_df function)
 apikey <- params$apiKey
 
 ```
@@ -260,7 +261,7 @@ I obtained 15,093 apicomplexan 18S ribosomal rRNA sequences from the NCBI 'nucco
 
 - Downloading the NCBI Apicomplexa 18S sequence dataset
 
-```{r downloads}
+```{r Downloads}
 # apikey <- 889fdb9786a14019a0a1257196a09ba4ba08
 
 # apicomplexa 18S, between 300-2500 bp, not from a genome,
@@ -324,7 +325,7 @@ Upon checking the distribution of sequence lengths, I found that they differ wid
 
 - Some initial tidying of the NCBI dataset
 
-```{r}
+```{r Initial Tidy}
 # read downloaded data
 apicomplexa.df <- read_rds('./data/apicomplexa.rds')
 
@@ -350,7 +351,7 @@ glimpse(apicomplexa.df)
 
 - Sequence record QC checks
 
-```{r}
+```{r Sequence QC}
 ## Various data checks:
 # what proportion are 'partial sequences'? nearly all
 summary(str_detect(tolower(apicomplexa.df$title), 'partial sequence'))
@@ -369,7 +370,7 @@ sum(str_count(apicomplexa.df$seq, '-')>0)
 
 - Tidying taxonomic labels and filtering poorly-described taxa
 
-```{r}
+```{r Tidy + Filter}
 # Tidying taxonomy info and creating genus labels for classfication
 apicomplexa.df <- apicomplexa.df %>%
   mutate(
@@ -406,7 +407,7 @@ dim(apicomplexa.df)
 
 - Filtering based on sequence label info
 
-```{r}
+```{r Label Filter}
 # discard any sequences that ae not labeled as dna; 
 # keep genomic, not mitochondrial, plastid, or ambiguous genome
 apicomplexa.df <- apicomplexa.df %>%
@@ -431,6 +432,13 @@ apicomplexa.df <- apicomplexa.df %>%
 glimpse(apicomplexa.df)
 ```
 
+```{r Fig2}
+ggplot(data=apicomplexa.df, aes(apicomplexa.df$slen)) + 
+  geom_histogram(binwidth = 50) +
+  xlab("Sequence Length (Nucleotides)") +
+  ylab("Number of Sequences")
+```
+**Figure 2** Histogram of sequence lengths shows several distinct peaks, indicating the dataset does not follow a normal distribution. Further investigation of the data composition will be performed, then the data will be split relevant groups for classifier training and validation.
 
 ----
 
@@ -448,7 +456,7 @@ I created three subsets of sequences for classifier training and validation:
 Proportions of (1-4)-mers were generated for each dataset using `Biostrings`; all datasets were split 50-50 into training and validation sets using the `caret` package prior to training.
 
 
-```{r}
+```{r Data Overview}
 # How many sequences? species present? genera?
 nrow(apicomplexa.df)
 length(unique(apicomplexa.df$organism))
@@ -472,10 +480,10 @@ kable(head(species_table, 20), format = 'simple')
 
 rm(count, genus, organism)
 ```
-
+**Table 1** 
 - Creating down-sampled datasets with selected common taxa
 
-```{r}
+```{r Down-sampling}
 ## dataset 1: genus-rank: 7 genera * 225 seqs
 # create genera dataset with top 7 genera
 genera.df <- apicomplexa.df %>%
@@ -516,9 +524,9 @@ write_rds(species.df, "./data/dataset.species.rds")
 write_rds(babes_theiler.df, "./data/dataset.babesia_theileria.rds")
 ```
 
-- plot fig.2
+- plot fig.3
 
-```{r, fig.height=3.5, fig.width=7}
+```{r Fig3, fig.height=3.5, fig.width=7}
 # Plot fig.2: EDA of sequences in genus-rank dataset
 
 # genus-rank dataset (training and test, before splitting)
@@ -565,7 +573,7 @@ species.plot <- df %>%
   mutate(text=ifelse(n>50, organism, '')) %>%
   ggplot(aes(y= genus, x = n, colour = genus)) + 
   geom_jitter(height = 0.25, width=0.1, alpha = 0.7, size = 1.4) +
-  labs(x = 'n sequences', y='') +
+  labs(x = 'Number of Sequences', y='') +
   geom_rangeframe(color = 'darkgrey') +
   # geom_text(aes(label=text, size = 9)) +
   scale_y_discrete(limits = rev(levels(df$genus))) +
@@ -580,7 +588,7 @@ write_rds(plot.genus.eda, './results/plot.genus.eda.rds')
 rm(seqlen.plot, gc.pointrange, species.plot, gc.df, df, species_table, genus_table)
 ```
 
-**Figure 2**. Characteristics of sequences from seven apicomlexan genera in the data used in comparing various classification algorithms (RF, NB, GBM, kNN). *left*: Sequence length varies by genera with some groups being bimodal; *middle*: GC-content for each genus (mean+/-sd); *right*: The dataset contains 208 species; to illustrate the distribution of sequences to species within each genera, each species is represented as a point and plotted the sequence count (eg. *Eimeria* and *Theileria* contain many species with low representation in the dataset; *Hepatozoon* and *Plasmodium* each contain one species that accounts for a large proportion of the sequences).
+**Figure 3**. Characteristics of sequences from seven apicomlexan genera in the data used in comparing various classification algorithms (RF, NB, GBM, kNN). *left*: Sequence length varies by genera with some groups being bimodal; *middle*: GC-content for each genus (mean+/-sd); *right*: The dataset contains 208 species; to illustrate the distribution of sequences to species within each genera, each species is represented as a point and plotted the sequence count (eg. *Eimeria* and *Theileria* contain many species with low representation in the dataset; *Hepatozoon* and *Plasmodium* each contain one species that accounts for a large proportion of the sequences).
 
 
 ----
@@ -590,7 +598,7 @@ rm(seqlen.plot, gc.pointrange, species.plot, gc.df, df, species_table, genus_tab
 Because the number of k-mers increases by a factor of four with length and I wanted to keep computation times short, I decided to use the proportions of all (1-4)-mers to generate profiles for classification. There are 339 variables in the k-mer profiles ('T' is excluded). Longer kmers are more discriminatory, but with k>5 the number of possible k-mers would exceed the number of observations in the training datasets.
 
 
-```{r}
+```{r Feature generation}
 # Generate features for each dataset: genera, species, babesia+theileria
 genera.feat.df <-  genera.df %>%
   generate_kmer_features(.) %>%
@@ -607,9 +615,9 @@ babes_theiler.feat.df <-babes_theiler.df %>%
 ```
 
 
-- plot k-mer profiles by genus (fig. 3)
+- plot k-mer profiles by genus (fig. 4)
 
-```{r fig.height=4, fig.width=8}
+```{r Fig4, fig.height=4, fig.width=8}
 plot.kmer.profiles <- genera.feat.df %>%
   # get-wide format
   dplyr::select(genus, AAAA:TTTT) %>%
@@ -623,7 +631,7 @@ plot.kmer.profiles <- genera.feat.df %>%
   scale_x_log10() +
   facet_wrap(~genus, nrow = 2) +
   theme_tufte(base_family = 'sans') +
-  labs(x = 'proportion', y = '4-mers (lexicographically)') +
+  labs(x = 'K-mer Proportion', y = '4-mers (Lexicographically)') +
   theme(axis.title.y = element_text(angle = 90),
         axis.text.y = element_text(),
         axis.text.x = element_blank(), axis.ticks.x = element_blank()) +
@@ -631,13 +639,13 @@ plot.kmer.profiles <- genera.feat.df %>%
 plot.kmer.profiles
 write_rds(plot.kmer.profiles, "./results/plot.kmer.profiles.rds")
 ```
-**Figure 3.** 18S rRNA 4-mer profiles of apicomplexan genera give a sense of group differences in the genus-rank dataset that was used to compare classification algorithms. Each point shows the proportion (y-axis) of a k-mer (lexicographically along x-axis) in a single sequence; all sequences for a given genus are plotted in the same panel. Zero-values of k-mer proportions are shown as 1e-04. Some patterns may be emphasized by the uneven distribution of sequences between species within genera (fig.2:right).
+**Figure 4.** 18S rRNA 4-mer profiles of apicomplexan genera give a sense of group differences in the genus-rank dataset that was used to compare classification algorithms. Each point shows the proportion (y-axis) of a k-mer (lexicographically along x-axis) in a single sequence; all sequences for a given genus are plotted in the same panel. Zero-values of k-mer proportions are shown as 1e-04. Some patterns may be emphasized by the uneven distribution of sequences between species within genera (fig.4:right).
 
 -----
 
 - k-mer proportions are not normally distributed (Shapiro-Wilk test)
 
-```{r message=FALSE, warning=FALSE, fig.height=2}
+```{r Shapiro, message=FALSE, warning=FALSE, fig.height=2}
 kmer_proportions <- genera.feat.df %>%
   dplyr::select(genus, AAAA:TTTG) %>%
   pivot_longer(cols = AAAA:TTTG, names_to = 'kmer', 
@@ -650,8 +658,11 @@ test1 <- kmer_proportions %>%
 test1 %>%
   ggplot() +geom_histogram(aes(x=shapiro_p)) + scale_x_log10() +
   geom_rangeframe() + 
-  theme_tufte(base_family = 'sans')
-
+  theme_tufte(base_family = 'sans') +
+  xlab("Shapiro p value") +
+  ylab("Count")
+```
+```{r proportions, message=FALSE, warning=FALSE, fig.height=3}
 kmer_proportions %>%
   filter(kmer %in% c('AAAA','CGAT','AAGG', 'GTCC', 'CGCG')) %>%
   ggplot() + 
@@ -660,7 +671,9 @@ kmer_proportions %>%
   facet_wrap(~kmer, scales = 'free_x') +
   geom_rangeframe() +
   # scale_x_log10() +
-  theme_tufte(base_family = 'sans')
+  theme_tufte(base_family = 'sans') +
+  xlab("K-mer Proportion") +
+  ylab("Density")
 
 rm(kmer_proportions, test1)
 ```
@@ -670,7 +683,7 @@ rm(kmer_proportions, test1)
 
 Data were split 50-50 into training and validation datasets using the `caret` package.
 
-```{r}
+```{r Data Splitting}
 # for reproducibility
 set.seed(1)
 
@@ -712,7 +725,7 @@ rm(inTrainingSet, genera.feat.df, species.feat.df)
 
 I tried four different classification algorithms (random forest, stochastictic gradient boosting, naive Bayes, and k-nearest neighbors) to get an idea of which might be best suited to the specific task of classifying 18S sequences by their (1-4)-mer profiles. For each model, I used the `caret` package to perform a search through various model tuning parameters to select an optimal model. Bootstrapping (5x) was performed to strengthen accuracy estimates. Computations were parallelized to speed up the training of classifiers, using the `parallel::makeCluster
 
-```{r}
+```{r Processor Clusters}
 # setup cluster of processors - I had to use 'sequential' for setup strategy or fail. 
 # *note* this probably doesn't work on windows, only unix-based systems. 
 # Using 4 cores on my macbookpro.
@@ -780,9 +793,9 @@ rpartConfusionMatrix1 <- confusionMatrix(rpartPredict1, genusTrain$genus)
 print(rpartConfusionMatrix1)
 
 #Plot decision tree
-fancyRpartPlot(model=rpartTree1, caption = "Genus classification")
+fancyRpartPlot(model=rpartTree1, caption = "Genus classification", main = "1-mer Decision Tree", yshift = -10)
 ```
-**Figure 4**. 1-mer decision tree of Apicomplexan genera.
+**Figure 5**. 1-mer decision tree of Apicomplexan genera.
 ```{r 2-mer Classification}
 #Build classification tree
 rpartTree2 <- rpart(formula = genus~., data = genusTrain[,c(1,5:20)], method='class')
@@ -800,9 +813,9 @@ rpartConfusionMatrix2 <- confusionMatrix(rpartPredict2, genusTrain$genus)
 print(rpartConfusionMatrix2)
 
 #Plot decision tree
-fancyRpartPlot(model=rpartTree2, caption = "Genus classification")
+fancyRpartPlot(model=rpartTree2, caption = "Genus classification", main = "2-mer Decision Tree", yshift = -10)
 ```
-**Figure 5**. 2-mer decision tree of Apicomplexan genera.
+**Figure 6**. 2-mer decision tree of Apicomplexan genera.
 ```{r 3-mer Classification}
 #Build classification tree
 rpartTree3 <- rpart(formula = genus~., data = genusTrain[,c(1,21:84)], method='class')
@@ -820,9 +833,9 @@ rpartConfusionMatrix3 <- confusionMatrix(rpartPredict3, genusTrain$genus)
 print(rpartConfusionMatrix3)
 
 #Plot decision tree
-fancyRpartPlot(model=rpartTree3, caption = "Genus classification")
+fancyRpartPlot(model=rpartTree3, caption = "Genus classification", main = "3-mer Decision Tree", yshift = -10)
 ```
-**Figure 6**. 3-mer decision tree of Apicomplexan genera.
+**Figure 7**. 3-mer decision tree of Apicomplexan genera.
 ```{r 4-mer Classification}
 #Build classification tree
 rpartTree4 <- rpart(formula = genus~., data = genusTrain[,c(1,85:340)], method='class')
@@ -840,12 +853,13 @@ rpartConfusionMatrix4 <- confusionMatrix(rpartPredict4, genusTrain$genus)
 print(rpartConfusionMatrix4)
 
 #Plot decision tree
-fancyRpartPlot(model=rpartTree4, caption = "Genus classification")
+fancyRpartPlot(model=rpartTree4, caption = "Genus classification", main = "4-mer Decision Tree", yshift = -10)
 ```
-**Figure 7**. 4-mer decision tree of Apicomplexan genera.
+**Figure 8**. 4-mer decision tree of Apicomplexan genera.
+
 #### Stochastic gradient boosting (GBM):
 
-Similar to random forest, stochastic gradient boosting also employs a  another tree ensemble-based approach, except with a large number of tiny decision stumps strengthened through 'boosting'. GBM is prone to over-training as the algorithm doesn't stop automatically. Two tuning searches over a range of stump-depths (1,2, or 3 per node; GBM1), learning rates (0.01, 0.1; GBM2), and boosting iterations (50-150 GBM1; 100-500 GBM2). After performing the first tuning search (fig.5:GBM1), it appeared that the optimal model (`depth`=2, `ntree`=150) could still be improved with more boosting iterations. This was not the case, though it was confirmed that the model would not be improved by decreasing the learning rate, given 100-500 boosting iterations (fig.5:GBM2). Bootstrapped accuracy estimates of the GBM1 and GBM2 models were 98 % (sd=0.6) and 97.5 % (sd=0.7).
+Similar to random forest, stochastic gradient boosting also employs a  another tree ensemble-based approach, except with a large number of tiny decision stumps strengthened through 'boosting'. GBM is prone to over-training as the algorithm doesn't stop automatically. Two tuning searches over a range of stump-depths (1,2, or 3 per node; GBM1), learning rates (0.01, 0.1; GBM2), and boosting iterations (50-150 GBM1; 100-500 GBM2). After performing the first tuning search (fig.9:GBM1), it appeared that the optimal model (`depth`=2, `ntree`=150) could still be improved with more boosting iterations. This was not the case, though it was confirmed that the model would not be improved by decreasing the learning rate, given 100-500 boosting iterations (fig.10:GBM2). Bootstrapped accuracy estimates of the GBM1 and GBM2 models were 98 % (sd=0.6) and 97.5 % (sd=0.7).
 
 
 ```{r gbm1}
@@ -982,28 +996,32 @@ knn.model <- read_rds('./models/knn.model.rds')
 # plot tunings for each model
 plot.rf.model <- ggplot(rf.model) +
   geom_rangeframe() +  theme_tufte(base_family = 'sans') +
-  labs(subtitle = 'RF') 
+  labs(subtitle = 'RandomForest') +
+  xlab("# of Randomly Selected Predictors")
 plot.gbm.model <- ggplot(gbm.model) +
   geom_rangeframe() +
-  labs(subtitle = 'GBM1') +
+  labs(subtitle = 'Stochastic Gradient Boosting 1') +
   scale_shape('Max depth') +
   scale_color_carto_d('Max depth', palette = 2) +
-  theme_tufte(base_family = 'sans')
+  theme_tufte(base_family = 'sans') +
+  xlab("# of Boosting Iterations")
 plot.gbm2.model <- ggplot(gbm.model2) +
   geom_rangeframe() +
-  labs(subtitle = 'GBM2') +
+  labs(subtitle = 'Stochastic Gradient Boosting 1') +
   scale_color_carto_d('Shrinkage', palette = 3, direction = 1) +
-  theme_tufte(base_family = 'sans') 
+  theme_tufte(base_family = 'sans') +
+  xlab("# of Boosting Iterations")
 plot.nb1.model <- ggplot(nb.model) + geom_rangeframe() +
   theme_tufte(base_family = 'sans') +
-  labs(subtitle = 'NB')
+  labs(subtitle = 'Naive Bayes')
 plot.knn.model <- ggplot(knn.model) +
   geom_rangeframe() + theme_tufte(base_family = 'sans') +
-  labs(subtitle = 'kNN')
+  labs(subtitle = 'K-Nearest Neighbours') +
+  xlab("# of Neighbours")
 ```
 
 
-```{r fig.width=8, fig.height=5, fig.align='center'}
+```{r Fig9, fig.width=8, fig.height=5, fig.align='center'}
 # create a panel with all the plots from the training of each model using caret 
 plot.tunings <- 
   plot.rf.model +
@@ -1016,17 +1034,17 @@ plot.tunings <-
 plot.tunings
 write_rds(plot.tunings, './results/plot.tunings.rds')
 ```
-**Figure 8**. Tuning searches for each classification algorithm in training on the genus-rank dataset of apicomplexan 18S k-mer profiles. Each point represents an individual classifier explored during the tuning search by `caret::train`.
+**Figure 9**. Tuning searches for each classification algorithm in training on the genus-rank dataset of apicomplexan 18S k-mer profiles. Each point represents an individual classifier explored during the tuning search by `caret::train`.
 
 
 
 ## Testing the 'genus-rank' classifiers on unknown data
 
 Five classifiers (GBM1, GBM2, kNN, NB, RF) were tested against the genus-rank test dataset for validation.
-The overall and class-specific performance measures of each classifier against unseen data were evaluated (fig. 6). 
-In terms of overall accuracy, the k-NN, RF, and GBM models were outstanding (~98.5% accuracy), and differences between these were small relative to error (fig.6:left). 
+The overall and class-specific performance measures of each classifier against unseen data were evaluated (fig. 10). 
+In terms of overall accuracy, the k-NN, RF, and GBM models were outstanding (~98.5% accuracy), and differences between these were small relative to error (fig.10:left). 
 Naive Bayes performed poorly in comparison, with a pitiful 94% accuracy on the unseen data. 
-In terms of genus-specific performance, four algorithm (RF, GBM, kNN) show a similar performance profile, with lower performance on *Babesia* and *Theileria* sequences (fig.6:right). 
+In terms of genus-specific performance, four algorithm (RF, GBM, kNN) show a similar performance profile, with lower performance on *Babesia* and *Theileria* sequences (fig.10:right). 
 In contrast, the naive Bayes struggled on *Sarcocystis* and *Eimeria*, whereas the other classifiers performed well on these groups.
 
 - summarize results from testing with genus-rank dataset
@@ -1077,9 +1095,9 @@ write_rds(classifiers, "./models/genus_classifier_models.rds",
 ```
 
 
-- plot fig. 6: left
+- plot fig. 10: left
 
-```{r}
+```{r Fig10L}
 # extract overall statistics from confusion matrix obj for each model
 genus.classifiers.df <- tibble(
   name = as.factor(c('RF', 'GBM', 'GBM2', 'NB', "kNN")),
@@ -1110,9 +1128,9 @@ write_rds(plot.genus.results, "./results/plot.genus.results.rds")
 
 
 
-- plot accuracy of each model by genus: fig5. right
+- plot accuracy of each model by genus: fig10. right
 
-```{r, fig.height=4, fig.width=8}
+```{r Fig10, fig.height=4, fig.width=8}
 
 byclass.df <- 
   tibble(
@@ -1162,13 +1180,13 @@ write_rds(plot.genus.byclass.results,
           "./results/plot.genus.byclass.results.rds")
 
 ```
-**Figure 9**. Performance of various genus-rank classifiers in validation with unseen 18S k-mer profiles from the test dataset. *left* Overall accuracy +/- sd is shown as a point-range in black, Kappa statistic is shown as a red point; *right* Genus-specific performance statistics for the five classifiers tested. (GBM: stochastic gradient boosting, kNN: k-nearest neighbours, NB: naive Bayes, RF: random forest)
+**Figure 10**. Performance of various genus-rank classifiers in validation with unseen 18S k-mer profiles from the test dataset. *left* Overall accuracy +/- sd is shown as a point-range in black, Kappa statistic is shown as a red point; *right* Genus-specific performance statistics for the five classifiers tested. (GBM: stochastic gradient boosting, kNN: k-nearest neighbours, NB: naive Bayes, RF: random forest)
 
 -----
 
 - done with genus-level classifiers
 
-```{r}
+```{r Tidy Env}
 # tidy up environment
 rm(rf.model, gbm.model, gbm.model2, knn.model, nb.model)
 rm(rf.confusion, gbm.confusion, gbm2.confusion, nb.confusion, knn.confusion)
@@ -1182,7 +1200,7 @@ rm(ctrl, cl)
 
 ## Random forest classifier for species-level assignments with two datasets
 
-A random forest classifier was trained on the 'species-rank' training set of 600 18S rRNA k-mer profiles from 20 different apicomplexan species. Models were generated using range of `mtry` (predictors per node) values (1-30) and accuracy estimated were derived from by a 5 times 5-fold cross-validation re-sampling. The best random forest classifier (`mtry=25`) had a training accuracy of 93.9% (sd. 2.3%; Kappa: 0.936 +/- 0.024). The classifier was validated by testing on an unseen dataset of 580 k-mer profiles evenly divided between 20 species; test accuracy was 95.5% (95% CI: 93.5, 97.0; Kappa 0.952; fig.6-left).
+A random forest classifier was trained on the 'species-rank' training set of 600 18S rRNA k-mer profiles from 20 different apicomplexan species. Models were generated using range of `mtry` (predictors per node) values (1-30) and accuracy estimated were derived from by a 5 times 5-fold cross-validation re-sampling. The best random forest classifier (`mtry=25`) had a training accuracy of 93.9% (sd. 2.3%; Kappa: 0.936 +/- 0.024). The classifier was validated by testing on an unseen dataset of 580 k-mer profiles evenly divided between 20 species; test accuracy was 95.5% (95% CI: 93.5, 97.0; Kappa 0.952; fig.11-left).
 
 
 ```{r RF species train}
@@ -1247,7 +1265,7 @@ print(rf.species.confusion$overall)
 
 ## A tougher species classification problem?: *Babesia* - *Theileria* assignment
 
-To test the limits of the random forest algorithm, I assembled a dataset of 686 18S rRNA k-mer profiles, including 8 species of the genus *Babesia* and 6 species of the closely-related genus *Theileria*, with sequences evenly-split between species. This set was split 1:1 into training and test datasets. Training was performed for a range of `mtry` values; re-sampling was done by a 5 times 10-fold cross-validation strategy. The best model (`mtry=30`) had an estimated accuracy of 94.1% (sd. 4.8%; Kappa 0.936 +/- 0.051) in training. When tested on the unseen portion of the data, accuracy increased to 97.6% (95% CI: 95.4, 99.0; Kappa 0.974; fig.6-right).
+To test the limits of the random forest algorithm, I assembled a dataset of 686 18S rRNA k-mer profiles, including 8 species of the genus *Babesia* and 6 species of the closely-related genus *Theileria*, with sequences evenly-split between species. This set was split 1:1 into training and test datasets. Training was performed for a range of `mtry` values; re-sampling was done by a 5 times 10-fold cross-validation strategy. The best model (`mtry=30`) had an estimated accuracy of 94.1% (sd. 4.8%; Kappa 0.936 +/- 0.051) in training. When tested on the unseen portion of the data, accuracy increased to 97.6% (95% CI: 95.4, 99.0; Kappa 0.974; fig.11-right).
 
 ```{r RF Babesia train}
 # set train control to 5 times 10-fold cross-validation
@@ -1288,7 +1306,7 @@ rf.model.babesia
 ggplot(rf.model.babesia) + 
   theme_tufte(base_family = 'sans') +
   labs(subtitle = 'RF tuning: Babesisa/Theileria data', 
-       y = 'Accuracy\n(repeated CV)')
+       y = 'Accuracy\n(repeated CV)', x = "# of Randomly Selected Predictors")
 ```
 
 <!-- Babesia/Theileria test: -->
@@ -1312,7 +1330,7 @@ print(rf.babesia.confusion$overall)
 
 - plot overall results of RF on 3 datasets; show by-class results on the species-rank dataset (20 species)
 
-```{r, fig.height=4, fig.width=8}
+```{r Fig11LR, fig.height=4, fig.width=8}
 ## Gather overall test results for RF classifiers on the three datasets
 rank_overall.df <- bind_rows(
   rf.species.overall <- tibble(
@@ -1330,7 +1348,7 @@ rank_overall.df <- bind_rows(
 ) %>%
   pivot_wider(names_from = 'stat', values_from = 'value')
 
-## fig.6.left
+## fig.11.left
 ## plot RF classifier overall accuracy on the 3 test datasets
 plot.overall.acc.byrank <- ggplot(rank_overall.df) +
   geom_rangeframe(color = 'black') +
@@ -1341,7 +1359,7 @@ plot.overall.acc.byrank <- ggplot(rank_overall.df) +
                       x = Accuracy, xmax=AccuracyUpper), colour = 'red4') +
   
   theme_tufte(base_family = 'sans') +
-  labs(x = 'Test accuracy +/- sd', y='Dataset') + 
+  labs(x = 'Test Accuracy ± SD', y='Dataset') + 
   coord_flip() +
   theme(axis.text.x = element_text(angle = 30, hjust = 1, vjust = 1))
 
@@ -1369,13 +1387,13 @@ plot.rf.species.byclass <- ggplot(rf.species.byclass) +
         strip.background = element_blank(),
         strip.text.x = element_text(vjust = 0))
 
-# Fig.6 combine l+r
-fig6 <- plot.overall.acc.byrank + plot.rf.species.byclass +
+# Fig.11 combine l+r
+fig11 <- plot.overall.acc.byrank + plot.rf.species.byclass +
   plot_layout(widths = c(1,4))
-fig6
-write_rds(fig6, './results/plot.fig6.rds')
+fig11
+write_rds(fig11, './results/plot.fig11.rds')
 ```
-**Figure 10**. *left:* Overall accuracy of random forest classifiers on three datasets, with assignments at the species- ('species-rank' and '*Babesia/Theileria*' datasets) and genus-ranks. *right:* By-class accuracy of the random forest classifier on sequences from 20 species of *Apicomplexa* (species-rank dataset).
+**Figure 11**. *left:* Overall accuracy of random forest classifiers on three datasets, with assignments at the species- ('species-rank' and '*Babesia/Theileria*' datasets) and genus-ranks. *right:* By-class accuracy of the random forest classifier on sequences from 20 species of *Apicomplexa* (species-rank dataset).
 
 
 --------------------------------
