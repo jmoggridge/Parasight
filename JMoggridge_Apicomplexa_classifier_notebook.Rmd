@@ -579,8 +579,8 @@ rm(seqlen.plot, gc.pointrange, species.plot, gc.df, df, species_table, genus_tab
 
 **Figure 3**. Characteristics of sequences from seven apicomlexan genera in the data used in comparing various classification algorithms (RF, NB, GBM, kNN). *left*: Sequence length varies by genera with some groups being bimodal; *middle*: GC-content for each genus (mean+/-sd); *right*: The dataset contains 208 species; to illustrate the distribution of sequences to species within each genera, each species is represented as a point and plotted the sequence count (eg. *Eimeria* and *Theileria* contain many species with low representation in the dataset; *Hepatozoon* and *Plasmodium* each contain one species that accounts for a large proportion of the sequences).
 
-- Visualize sequence alignment
-```{r Fig 3 Alignment}
+- Sequence alignment
+```{r Alignment}
 #For reproducibility
 set.seed(1) 
 
