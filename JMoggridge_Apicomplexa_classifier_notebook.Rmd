@@ -1,6 +1,6 @@
 ---
 title: "**Para*sight***: Classification of apicomplexan 18S rRNA sequences using (1-4)-mer profiles ~ *notebook*"
-author: "Jason Moggridge and ...."
+author: "Jason Moggridge with Secondary Contribution by Nick Werry and Additional Editing by Julia Harvie and Kerry Woolnough"
 date: "06/11/2020"
 output: pdf_document
 bibliography: references.bib
@@ -39,7 +39,7 @@ Apicomplexans are a large phylum of single-celled eukaryotes, all of which are o
 As the agents responsible for many common and serious diseases - including malaria, toxoplasmosis, babesiosis, cryptosporiosis, *etc*. - they represent a major burden to health and economy across the globe [@flegr_toxoplasmosis_2014; @kristmundsson_harmless_2018]. 
 It is of great interest to detect and classify these organisms as a first step towards diagnosis and treatment.
 
-```{r, out.width = "400px", fig.align='center'}
+```{r Fig1, out.width = "400px", fig.align='center'}
 knitr::include_graphics("./images/apicomplexa-parasites.png")
 ```
 **Figure 1**. Apicomplexa are eukaryotic endoparasites of metazoa. Their life-cycles can be complex, involving transmission by ectoparasitic vectors such as ticks or mosquitoes. Health and economic impacts of this group are significant as they affect wildlife, livestock, and humans globally. (Figure made with BioRender)
@@ -57,7 +57,7 @@ In this work, I evaluated the performance of popular classification algorithms o
 
 # Code and Analysis
 
-```{r, setup, include=FALSE}
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(
   cache = TRUE,
 	echo = TRUE,
@@ -80,7 +80,7 @@ if (!dir.exists(file.path('.','models'))){
 #### Libraries
 
 
-```{r message=FALSE, warning=FALSE}
+```{r Libraries, message=FALSE, warning=FALSE}
 ## Libraries
 # install.packages('tidyverse')
 library(tidyverse) # always and forever
@@ -110,12 +110,18 @@ library(gbm)
 library(klaR)
 # install.packages('randomForest')
 library(randomForest)
+# install.library('ggplot2')
+library(ggplot2)
 # install.packages('rpart')
 library(rpart)
 # install.packages('rattle')
 library(rattle)
-# install.library('ggplot2')
-library(ggplot2)
+# install.packages('Biostrings)
+library(Biostrings)
+# install.packages('muscle')
+library(muscle)
+# install.packages('DECIPHER')
+library(DECIPHER)
 ```
 
 ```{r Variables}
@@ -270,25 +276,6 @@ I obtained 15,093 apicomplexan 18S ribosomal rRNA sequences from the NCBI 'nucco
 #     300:2500[SLEN] AND biomol_genomic[PROP] NOT genome[TITL] AND
 #     (ddbj_embl_genbank[filter] OR refseq[filter])'
 
-
-get_ncbi_ids <- function(searchexp, db){
-  
-  # find out how many ids available from 1st search
-  Esearch <- rentrez::entrez_search(
-    db = db, 
-    term = searchexp, 
-    retmax = 100)
-  # use 'count' from first search to get all ids; get web history with 'use_history = TRUE'
-  Esearch2 <- rentrez::entrez_search(
-    db = db, 
-    term = searchexp, 
-    retmax = Esearch$count,
-    use_history = TRUE)
-  message('Returning metadata from basic search...')
-  print(Esearch2)
-  return(Esearch2)
-}
-
 # Get search metadata, summaries, sequences
 apicomplexa.search <- get_ncbi_ids(searchexp, db = 'nuccore')
 apicomplexa.summary.df <- get_ESummary_df(searchexp, 'nuccore', apikey)
@@ -347,6 +334,7 @@ apicomplexa.df <- apicomplexa.df %>%
   dplyr::select(id, organism, dplyr::everything())
 glimpse(apicomplexa.df)
 ```
+
 
 
 - Sequence record QC checks
@@ -431,7 +419,7 @@ apicomplexa.df <- apicomplexa.df %>%
 
 glimpse(apicomplexa.df)
 ```
-
+- Plot Fig 2
 ```{r Fig2}
 ggplot(data=apicomplexa.df, aes(apicomplexa.df$slen)) + 
   geom_histogram(binwidth = 50) +
@@ -439,6 +427,7 @@ ggplot(data=apicomplexa.df, aes(apicomplexa.df$slen)) +
   ylab("Number of Sequences")
 ```
 **Figure 2** Histogram of sequence lengths shows several distinct peaks, indicating the dataset does not follow a normal distribution. Further investigation of the data composition will be performed, then the data will be split relevant groups for classifier training and validation.
+
 
 ----
 
@@ -590,7 +579,32 @@ rm(seqlen.plot, gc.pointrange, species.plot, gc.df, df, species_table, genus_tab
 
 **Figure 3**. Characteristics of sequences from seven apicomlexan genera in the data used in comparing various classification algorithms (RF, NB, GBM, kNN). *left*: Sequence length varies by genera with some groups being bimodal; *middle*: GC-content for each genus (mean+/-sd); *right*: The dataset contains 208 species; to illustrate the distribution of sequences to species within each genera, each species is represented as a point and plotted the sequence count (eg. *Eimeria* and *Theileria* contain many species with low representation in the dataset; *Hepatozoon* and *Plasmodium* each contain one species that accounts for a large proportion of the sequences).
 
+- Sequence alignment
+```{r Alignment}
+#For reproducibility
+set.seed(1) 
 
+#Subset data for each genus for manageable alignment
+genera.sampled <- genera.df %>%
+  group_by(genus) %>%
+  sample_n(10) 
+
+#Merge species name + unique ID for visualizing later
+genera.sampled$org_id <- paste(genera.sampled$organism, genera.sampled$id, sep=" ")
+
+#Convert sequence to DNAStringSet format
+genera.sampled.df <- as.data.frame(genera.sampled)
+generaSeqs <- DNAStringSet(genera.sampled$seq)
+
+#Add name identifiers to sequences
+names(generaSeqs) <- genera.sampled$org_id
+
+#Align sequences
+genera.aligned <- DNAStringSet(muscle::muscle(generaSeqs))
+BrowseSeqs(genera.aligned) #Sequence must be viewed in browswer
+```
+
+10 randomly sampled sequences per genus were aligned. Sequences are highly variable across genera, but the presence of several regions of homology indicates they likely come from the same genetic region. Sequences were viewed in browser.
 ----
 
 ### Feature generation: k-mer profiles
@@ -1420,7 +1434,7 @@ This project would not even have been possible without many R packages that have
 
 # References
 
-```{r}
+```{r Celebration beeps}
 beep(7)
 Sys.sleep(1)
 beep(7)
